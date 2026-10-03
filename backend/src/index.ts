@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
-import { Connection, Client } from '@temporalio/client'
-import { verifyEmailWorkflow } from './workflows'
+import { Connection, Client, WorkflowIdReusePolicy } from '@temporalio/client'
+import { enrichPhoneWorkflow, verifyEmailWorkflow } from './workflows'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
 import { runTemporalWorker } from './worker'
 const prisma = new PrismaClient()
@@ -22,17 +22,27 @@ app.use(function (req, res, next) {
 })
 
 app.post('/leads', async (req: Request, res: Response) => {
-  const { name, lastName, email } = req.body
+  const { firstName, name, lastName, email, phone, yearsCompany, linkedinUrl } = req.body
+  const leadFirstName = firstName ?? name
 
-  if (!name || !lastName || !email) {
+  if (!leadFirstName || !lastName || !email) {
     return res.status(400).json({ error: 'firstName, lastName, and email are required' })
+  }
+
+  const parsedYearsCompany =
+    yearsCompany === undefined || yearsCompany === null || yearsCompany === '' ? null : Number(yearsCompany)
+  if (parsedYearsCompany !== null && (!Number.isInteger(parsedYearsCompany) || parsedYearsCompany < 0)) {
+    return res.status(400).json({ error: 'yearsCompany must be a non-negative integer' })
   }
 
   const lead = await prisma.lead.create({
     data: {
-      firstName: String(name),
+      firstName: String(leadFirstName),
       lastName: String(lastName),
       email: String(email),
+      phone: phone == null || String(phone).trim() === '' ? null : String(phone).trim(),
+      yearsCompany: parsedYearsCompany,
+      linkedinUrl: linkedinUrl == null || String(linkedinUrl).trim() === '' ? null : String(linkedinUrl).trim(),
     },
   })
   res.json(lead)
@@ -310,6 +320,73 @@ app.post('/leads/verify-emails', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error verifying emails:', error)
     res.status(500).json({ error: 'Failed to verify emails' })
+  }
+})
+
+app.post('/leads/enrich-phone', async (req: Request, res: Response) => {
+  const { leadIds } = req.body as { leadIds?: number[] }
+
+  if (!Array.isArray(leadIds) || leadIds.length === 0 || !leadIds.every(Number.isInteger)) {
+    return res.status(400).json({ error: 'leadIds must be a non-empty array of integers' })
+  }
+
+  try {
+    const leads = await prisma.lead.findMany({
+      where: { id: { in: [...new Set(leadIds)] } },
+    })
+    const connection = await Connection.connect({ address: 'localhost:7233' })
+    const client = new Client({ connection, namespace: 'default' })
+    let startedCount = 0
+    let skippedCount = leadIds.length - leads.length
+    const errors: Array<{ leadId: number; error: string }> = []
+
+    try {
+      for (const lead of leads) {
+        const claim = await prisma.lead.updateMany({
+          where: { id: lead.id, phone: null, phoneEnrichmentStatus: null },
+          data: { phoneEnrichmentStatus: 'processing' },
+        })
+
+        if (claim.count === 0) {
+          skippedCount++
+          continue
+        }
+
+        try {
+          await client.workflow.start(enrichPhoneWorkflow, {
+            workflowId: `enrich-phone-${lead.id}`,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+            taskQueue: 'myQueue',
+            args: [
+              {
+                leadId: lead.id,
+                fullName: `${lead.firstName} ${lead.lastName}`.trim(),
+                companyWebsite: lead.email.split('@')[1] ?? '',
+                email: lead.email,
+                jobTitle: lead.jobTitle,
+              },
+            ],
+          })
+          startedCount++
+        } catch (error) {
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { phoneEnrichmentStatus: 'failed' },
+          })
+          errors.push({
+            leadId: lead.id,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })
+        }
+      }
+    } finally {
+      await connection.close()
+    }
+
+    res.status(202).json({ success: errors.length === 0, startedCount, skippedCount, errors })
+  } catch (error) {
+    console.error('Error starting phone enrichment:', error)
+    res.status(500).json({ error: 'Failed to start phone enrichment' })
   }
 })
 
