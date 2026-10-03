@@ -9,6 +9,9 @@ describe('generateMessageFromTemplate', () => {
     jobTitle: 'Software Engineer',
     companyName: 'Tech Corp',
     countryCode: 'US',
+    phone: '+1-555-0100',
+    yearsCompany: 4,
+    linkedinUrl: 'https://www.linkedin.com/in/john-doe',
   }
 
   const partialLead: Lead = {
@@ -45,10 +48,10 @@ describe('generateMessageFromTemplate', () => {
 
     it('should handle template with all available fields', () => {
       const template =
-        'Name: {firstName} {lastName}, Email: {email}, Job: {jobTitle} at {companyName}, Country: {countryCode}'
+        'Name: {firstName} {lastName}, Email: {email}, Job: {jobTitle} at {companyName}, Country: {countryCode}, Phone: {phone}, Years: {yearsCompany}, LinkedIn: {linkedinUrl}'
       const result = generateMessageFromTemplate(template, fullLead)
       expect(result).toBe(
-        'Name: John Doe, Email: john.doe@example.com, Job: Software Engineer at Tech Corp, Country: US'
+        'Name: John Doe, Email: john.doe@example.com, Job: Software Engineer at Tech Corp, Country: US, Phone: +1-555-0100, Years: 4, LinkedIn: https://www.linkedin.com/in/john-doe'
       )
     })
 

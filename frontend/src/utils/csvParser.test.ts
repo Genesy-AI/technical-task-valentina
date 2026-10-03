@@ -103,6 +103,22 @@ Jane,Smith,jane@example.com`
     expect(result[1].isValid).toBe(true)
   })
 
+  it('should validate country codes and normalize valid codes', () => {
+    const csv = `firstName,lastName,email,countryCode
+John,Doe,john@example.com,us
+Jane,Smith,jane@example.com,XXX
+Alex,Jones,alex@example.com,12`
+
+    const result = parseCsv(csv)
+
+    expect(result[0].countryCode).toBe('US')
+    expect(result[0].isValid).toBe(true)
+    expect(result[1].isValid).toBe(false)
+    expect(result[1].errors).toContain('Invalid country code (expected ISO 3166-1 alpha-2)')
+    expect(result[2].isValid).toBe(false)
+    expect(result[2].errors).toContain('Invalid country code (expected ISO 3166-1 alpha-2)')
+  })
+
   it('should handle CSV with quoted values', () => {
     const csv = `firstName,lastName,email,jobTitle
 "John","Doe","john.doe@example.com","Software Engineer"`

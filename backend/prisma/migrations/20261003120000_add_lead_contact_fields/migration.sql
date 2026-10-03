@@ -1,0 +1,3 @@
+ALTER TABLE "lead" ADD COLUMN "phone" TEXT;
+ALTER TABLE "lead" ADD COLUMN "yearsCompany" INTEGER;
+ALTER TABLE "lead" ADD COLUMN "linkedinUrl" TEXT;

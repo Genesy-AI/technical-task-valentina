@@ -16,6 +16,8 @@ export const LeadsList: FC = () => {
     queryKey: ['leads', 'getMany'],
     queryFn: async () => api.leads.getMany(),
     retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.some((lead) => lead.phoneEnrichmentStatus === 'processing') ? 1500 : false,
   })
   
 
@@ -40,15 +42,38 @@ export const LeadsList: FC = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads', 'getMany'] })
       setIsEnrichDropdownOpen(false)
-      toast.success(
-        data.verifiedCount === 1
-          ? `Verified ${data.verifiedCount} email`
-          : `Verified ${data.verifiedCount} emails`
-      )
+      if (data.errors.length > 0) {
+        const failedCount = data.errors.length
+        toast.error(`${data.verifiedCount} emails processed; ${failedCount} failed`)
+      } else {
+        toast.success(
+          data.verifiedCount === 1
+            ? `Verified ${data.verifiedCount} email`
+            : `Verified ${data.verifiedCount} emails`
+        )
+      }
     },
     onError: () => {
       toast.error('Failed to verify emails. Please try again.')
     }
+  })
+
+  const enrichPhoneMutation = useMutation({
+    mutationFn: async (ids: number[]) => api.leads.enrichPhone({ leadIds: ids }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['leads', 'getMany'] })
+      setIsEnrichDropdownOpen(false)
+      if (data.errors.length > 0) {
+        toast.error(`Started ${data.startedCount}; ${data.errors.length} phone lookups failed to start`)
+      } else if (data.startedCount > 0) {
+        toast.success(`Phone lookup started for ${data.startedCount} lead${data.startedCount === 1 ? '' : 's'}`)
+      } else {
+        toast('Phone lookups are already running for the selected leads')
+      }
+    },
+    onError: () => {
+      toast.error('Failed to start phone lookup. Please try again.')
+    },
   })
 
   const handleSelectAll = (checked: boolean) => {
@@ -159,6 +184,18 @@ export const LeadsList: FC = () => {
                       </div>
                     </button>
                     <button
+                      onClick={() => enrichPhoneMutation.mutate(selectedLeads)}
+                      disabled={enrichPhoneMutation.isPending}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <svg className="mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h18M5 5v14m14-14v14M8 9h2m4 0h2m-8 4h2m4 0h2" />
+                        </svg>
+                        Find / Refresh Phone Numbers
+                      </div>
+                    </button>
+                    <button
                       onClick={() => {
                         toast.error('Gender guessing feature is not yet implemented')
                         setIsEnrichDropdownOpen(false)
@@ -232,6 +269,18 @@ export const LeadsList: FC = () => {
                   Company
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  Phone
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  Phone Lookup
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  Years at Company
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  LinkedIn
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                   Country
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
@@ -271,6 +320,30 @@ export const LeadsList: FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.companyName || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{lead.phone || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-700">
+                      {lead.phoneEnrichmentStatus === 'processing'
+                        ? 'Finding phone...'
+                        : lead.phoneEnrichmentStatus === 'found'
+                          ? 'Phone found'
+                          : lead.phoneEnrichmentStatus === 'no_data'
+                            ? 'No data found'
+                            : lead.phoneEnrichmentStatus === 'failed'
+                              ? 'Lookup failed'
+                              : 'Not searched'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{lead.yearsCompany ?? '-'}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900 max-w-xs truncate" title={lead.linkedinUrl || ''}>
+                      {lead.linkedinUrl || '-'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.countryCode || '-'}</div>

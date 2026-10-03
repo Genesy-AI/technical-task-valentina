@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import countries from 'i18n-iso-countries'
 
 export interface CsvLead {
   firstName: string
@@ -68,7 +69,7 @@ export const parseCsv = (content: string): CsvLead[] => {
           lead.jobTitle = trimmedValue || undefined
           break
         case 'countrycode':
-          lead.countryCode = trimmedValue || undefined
+          lead.countryCode = trimmedValue ? trimmedValue.toUpperCase() : undefined
           break
         case 'companyname':
           lead.companyName = trimmedValue || undefined
@@ -87,6 +88,9 @@ export const parseCsv = (content: string): CsvLead[] => {
       errors.push('Email is required')
     } else if (!isValidEmail(lead.email)) {
       errors.push('Invalid email format')
+    }
+    if (lead.countryCode && (lead.countryCode.length !== 2 || !countries.isValid(lead.countryCode))) {
+      errors.push('Invalid country code (expected ISO 3166-1 alpha-2)')
     }
 
     data.push({
