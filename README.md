@@ -68,6 +68,8 @@ pnpm gen:prisma           # Generate Prisma client
 temporal server start-dev # Starts Temporal server
 ```
 
+Create `backend/.env` and set `ORION_CONNECT_API_KEY`, `ASTRA_DIALER_API_KEY`, and `NIMBUS_LOOKUP_API_KEY` there. The backend loads this file at startup; provider credentials should not be placed in `frontend/.env`.
+
 **Backend (develop)**
 
 ```zsh

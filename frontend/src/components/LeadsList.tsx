@@ -68,7 +68,7 @@ export const LeadsList: FC = () => {
       } else if (data.startedCount > 0) {
         toast.success(`Phone lookup started for ${data.startedCount} lead${data.startedCount === 1 ? '' : 's'}`)
       } else {
-        toast('Phone lookup is already running or complete for the selected leads')
+        toast('Phone lookups are already running for the selected leads')
       }
     },
     onError: () => {
@@ -192,7 +192,7 @@ export const LeadsList: FC = () => {
                         <svg className="mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h18M5 5v14m14-14v14M8 9h2m4 0h2m-8 4h2m4 0h2" />
                         </svg>
-                        Find Phone Numbers
+                        Find / Refresh Phone Numbers
                       </div>
                     </button>
                     <button

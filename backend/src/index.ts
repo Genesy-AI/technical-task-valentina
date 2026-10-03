@@ -1,9 +1,14 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { Connection, Client, WorkflowIdReusePolicy } from '@temporalio/client'
+import dotenv from 'dotenv'
+import path from 'path'
 import { enrichPhoneWorkflow, verifyEmailWorkflow } from './workflows'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
 import { runTemporalWorker } from './worker'
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') })
+
 const prisma = new PrismaClient()
 const app = express()
 app.use(express.json())
@@ -343,7 +348,15 @@ app.post('/leads/enrich-phone', async (req: Request, res: Response) => {
     try {
       for (const lead of leads) {
         const claim = await prisma.lead.updateMany({
-          where: { id: lead.id, phone: null, phoneEnrichmentStatus: null },
+          where: {
+            id: lead.id,
+            OR: [
+              { phoneEnrichmentStatus: null },
+              { phoneEnrichmentStatus: 'found' },
+              { phoneEnrichmentStatus: 'no_data' },
+              { phoneEnrichmentStatus: 'failed' },
+            ],
+          },
           data: { phoneEnrichmentStatus: 'processing' },
         })
 
@@ -355,7 +368,7 @@ app.post('/leads/enrich-phone', async (req: Request, res: Response) => {
         try {
           await client.workflow.start(enrichPhoneWorkflow, {
             workflowId: `enrich-phone-${lead.id}`,
-            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+            workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
             taskQueue: 'myQueue',
             args: [
               {
